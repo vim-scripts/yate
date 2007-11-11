@@ -1,0 +1,26 @@
+This is a mirror of http://www.vim.org/scripts/script.php?script_id=2068
+
+This plugin makes search in tags more convenient. It holds query and search result in one buffer for faster jump to desired tag.
+
+Usage:
+Command :YATE toggles visibility of search buffer.
+Parameter g:YATE_window_height sets height of search buffer. Default = 15
+Parameter g:YATE_strip_long_paths enables(1)/disables(0) cutting of long file paths. Default = 1.
+Parameter g:YATE_enable_real_time_search enables(1)/disables(0) as-you-type search. Default = 1.
+Parameter g:YATE_min_symbols_to_search sets search string length threshold after which as-you-type search will start. Default = 4.
+Parameter g:YATE_max_matches_to_show sets the maximum number of matches to display. If it's negative than all lines will be shown. Default = -1.
+Parameter g:YATE_history_size sets the maximum number of stored search queries in history. Default = 10.
+
+To get list of matching tags set cursor on string containing expression
+to search (in YATE buffer) then press <Tab> or <Enter>, never mind if 
+you are in normal or insert mode.
+
+To open tag location set cursor on string with desired tag and
+press <Enter> or double click left mouse button on this string, 
+never mind if you are in normal or insert mode.
+
+To open tag in new tab press <Ctrl-Enter>, in new horizontal
+splitted buffer <Shift-Enter>, in new vertical splitted buffer <Ctrl-Shift-Enter>.
+
+To get queries history press <Ctrl-H> in insert or normal mode in
+search string. Autocompletion using history also works by <Ctrl-X><Ctrl-U>.
