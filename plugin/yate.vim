@@ -22,8 +22,8 @@
 " 				Parameter g:YATE_window_height sets height of search buffer.
 "
 " 				To get list of matching tags set cursor on string containing expression
-" 				to search (in YATE buffer) then press <Tab> or <Enter>, never mind if you are in normal 
-" 				or insert mode.
+" 				to search (in YATE buffer) then press <Tab> or <Enter>, never mind if 
+" 				you are in normal or insert mode.
 "
 " 				To open tag location set cursor on string with desired tag and
 " 				press <Enter> or double click left mouse button on this string, 
@@ -32,7 +32,13 @@
 " 				splitted buffer <Shift-Enter>, in new vertical splitted buffer 
 " 				<Ctrl-Shift-Enter>.
 "
-" Version:		0.9
+" Version:		0.9.1
+"
+" ChangeLog:	0.9.1:	Search string isn't cleared if there are no matched
+"						tags.
+"						Bug fixes.
+"
+" 				0.9:	First release
 "
 " TODO:			Custom mapping;
 " 				Real-time autocomplit;
@@ -81,8 +87,9 @@ endfun
 
 fun <SID>AutoCompleteString(str)
 	if !exists("s:tags_list") || !len(s:tags_list)
-		return
+		return a:str
 	endif
+
 	let res=a:str
 	" find shortest name
 	let sname=9999
@@ -119,12 +126,16 @@ fun <SID>PrintTagsList()
 	" clear buffer
 	exe 'normal ggdG'
 
-	if !exists("s:tags_list") || !len(s:tags_list)
+	if !exists("s:tags_list")
 		return
 	endif
-	
+
 	cal append(0,s:user_line)
 	exe 'normal dd$'
+
+	if !len(s:tags_list)
+		return
+	endif
 
 	" find the longest names, kind, filename
 	let lname=0
@@ -170,9 +181,7 @@ fun <SID>GenerateTagsList()
 endfun
 
 fun! <SID>ToggleTagExplorerBuffer()
-	let  firstTime=!exists("s:yate_winnr")
-	if firstTime || s:yate_winnr==-1
-
+	if !exists("s:yate_winnr") || s:yate_winnr==-1
 		exe "bo".g:YATE_window_height."sp YATE"
 		cal <SID>PrintTagsList()
 
@@ -205,9 +214,7 @@ fun! <SID>ToggleTagExplorerBuffer()
 
 		let s:yate_winnr=bufnr("YATE")
 
-		if firstTime
-			setlocal buftype=nofile
-		endif
+		setlocal buftype=nofile
 	else
 		exe ':wincmd p'
 		exe ':'.s:yate_winnr.'bd!'
