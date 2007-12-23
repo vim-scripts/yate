@@ -32,16 +32,20 @@
 " 				splitted buffer <Shift-Enter>, in new vertical splitted buffer 
 " 				<Ctrl-Shift-Enter>.
 "
-" Version:		0.9.1
+" Version:		0.9.2
 "
-" ChangeLog:	0.9.1:	Search string isn't cleared if there are no matched
+" ChangeLog:	0.9.2:	Attempt to search empty string doesn't produce error.
+" 						Replacement of modified buffer works correct.
+"						Close YATE buffer externally (by :q, ZZ etc.) dosn't break 
+"						its visibility toggle.
+"						Fixed bug leading to failure to open to tag containing square brackets.
+"
+" 				0.9.1:	Search string isn't cleared if there are no matched
 "						tags.
 "						Bug fixes.
 "
 " 				0.9:	First release
 "
-" TODO:			Custom mapping;
-" 				Real-time autocomplit;
 "====================================================================================
 if exists( "g:loaded_YATE" )
 	finish
@@ -75,14 +79,13 @@ fun <SID>GotoTag(open_command)
 	exe ':'.s:yate_winnr.'bd!'
 	let s:yate_winnr=-1
 
-	if !&modified
-		exe ':'.a:open_command.' '.s:tags_list[index]['filename']
-		exe substitute(s:tags_list[index]['cmd'],"\*","\\\\*","g")
-		" Without it you should press Enter once again some times.
-		exe 'normal Q'
-	else
-		throw "No write since last change."
-	endif
+	exe ':'.a:open_command.' '.s:tags_list[index]['filename']
+	let str=substitute(s:tags_list[index]['cmd'],"\*","\\\\*","g")
+	let str=substitute(str,"\[","\\\\[","g")
+	let str=substitute(str,"\]","\\\\]","g")
+	exe str
+	" Without it you should press Enter once again some times.
+	exe 'normal Q'
 endfun
 
 fun <SID>AutoCompleteString(str)
@@ -173,6 +176,9 @@ endfun
 
 fun <SID>GenerateTagsList()
 	" get tags list
+	if !len(getline('.'))
+		return
+	endif
 	let s:user_line=getline('.')
 	let s:tags_list=taglist(s:user_line)
 
@@ -213,6 +219,7 @@ fun! <SID>ToggleTagExplorerBuffer()
 		hi def link YATE_tag_filename Directory
 
 		let s:yate_winnr=bufnr("YATE")
+		autocmd BufUnload <buffer> exe 'let s:yate_winnr=-1'
 
 		setlocal buftype=nofile
 	else
