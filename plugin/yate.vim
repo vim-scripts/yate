@@ -12,14 +12,18 @@
 "				GNU General Public License for more details
 "				(http://www.gnu.org/copyleft/gpl.txt).
 "
-" Description:	This plugin is trying to make search in tags more convenient.
+" Description:	This plugin makes search in tags more convenient.
 " 				It holds query and search result in one buffer for faster jump to 
 " 				desired tag.
 "
 " Installation:	Just drop this file in your plugin directory.
 "
 " Usage:		Command :YATE toggles visibility of search buffer.
-" 				Parameter g:YATE_window_height sets height of search buffer.
+" 				Parameter g:YATE_window_height sets height of search buffer. Default = 15
+" 				Parameter g:YATE_strip_long_paths enables(1)/disables(0) cutting of long file paths. Default = 1.
+" 				Parameter g:YATE_enable_real_time_search enables(1)/disables(0) as-you-type search. Default = 1.
+" 				Parameter g:YATE_min_symbols_to_search sets search string length threshold 
+" 				after which as-you-type search will start. Default = 4.
 "
 " 				To get list of matching tags set cursor on string containing expression
 " 				to search (in YATE buffer) then press <Tab> or <Enter>, never mind if 
@@ -32,9 +36,17 @@
 " 				splitted buffer <Shift-Enter>, in new vertical splitted buffer 
 " 				<Ctrl-Shift-Enter>.
 "
-" Version:		0.9.2
+" Version:		1.0.0
 "
-" ChangeLog:	0.9.2:	Attempt to search empty string doesn't produce error.
+" ChangeLog:	1.0.0:	Added automatic search after input of any character
+"						(so called as-you-type search).
+" 						Long file paths may be cut to fit line width.
+" 						Fixed bug preventing jump by tags containing ~ (e.g.
+"						c++ destructors).
+"						Fixed bug preventing jump by tags in files with mixed
+"						line ends (Win/Unix).
+"
+" 				0.9.2:	Attempt to search empty string doesn't produce error.
 " 						Replacement of modified buffer works correct.
 "						Close YATE buffer externally (by :q, ZZ etc.) dosn't break 
 "						its visibility toggle.
@@ -63,13 +75,25 @@ if !exists("g:YATE_window_height")
 	let g:YATE_window_height = 15
 endif
 
+if !exists("g:YATE_strip_long_paths")
+	let g:YATE_strip_long_paths = 1
+endif
+
+if !exists("g:YATE_enable_real_time_search")
+	let g:YATE_enable_real_time_search = 1
+endif
+
+if !exists("g:YATE_min_symbols_to_search")
+	let g:YATE_min_symbols_to_search = 4
+endif
+
 command! -bang YATE :call <SID>ToggleTagExplorerBuffer()
 
 fun <SID>GotoTag(open_command)
 	let str=getline(".")
 
 	if !exists("s:tags_list") || !len(s:tags_list) || match(str,"^.*|.*|.*|.*$")
-		call <SID>GenerateTagsList()
+		call <SID>GenerateTagsListCB()
 		return
 	endif
 
@@ -83,6 +107,8 @@ fun <SID>GotoTag(open_command)
 	let str=substitute(s:tags_list[index]['cmd'],"\*","\\\\*","g")
 	let str=substitute(str,"\[","\\\\[","g")
 	let str=substitute(str,"\]","\\\\]","g")
+	let str=substitute(str,"\\~","\\\\~","g")
+	let str=substitute(str,"\$/","*$/","g")
 	exe str
 	" Without it you should press Enter once again some times.
 	exe 'normal Q'
@@ -156,9 +182,10 @@ fun <SID>PrintTagsList()
 		endif
 	endfor
 
+	let window_width=winwidth('$')
 	let counter=0
 	for i in s:tags_list
-		let str=counter."\t| ".i["name"]
+		let str=printf("%3d | %s",counter,i["name"])
 		for j in range(strlen(i["name"]),lname)
 			let str=str.' '
 		endfor
@@ -166,7 +193,19 @@ fun <SID>PrintTagsList()
 		for j in range(strlen(i["kind"]),lkind)
 			let str=str.' '
 		endfor
-		let str=str.'| '.i["filename"]
+
+		let str=str.'| '
+		if !g:YATE_strip_long_paths
+			let str=str.i["filename"]
+		else
+			let sp=window_width-strlen(str)-3
+
+			if strlen(i["filename"])<=sp
+				let str=str.i["filename"]
+			else
+				let str=str.'...'.strpart(i["filename"],strlen(i["filename"])-sp+3,sp-3)
+			endif
+		endif
 		
 		cal append(line("$"),str)
 
@@ -174,16 +213,45 @@ fun <SID>PrintTagsList()
 	endfor
 endfun
 
-fun <SID>GenerateTagsList()
+fun <SID>GenerateTagsList(str,auto_compl)
 	" get tags list
-	if !len(getline('.'))
+	if !strlen(a:str)
 		return
 	endif
-	let s:user_line=getline('.')
+	let s:user_line=a:str
 	let s:tags_list=taglist(s:user_line)
 
-	let s:user_line=<SID>AutoCompleteString(s:user_line)
+	if a:auto_compl
+		let s:user_line=<SID>AutoCompleteString(s:user_line)
+	endif
 	cal <SID>PrintTagsList()
+endfun
+
+fun <SID>AppendChar(char)
+	let save_cursor = getpos(".")
+
+	let str=getline('.')
+	if strlen(str)==save_cursor[2]
+		let str=str.a:char
+	else
+		let str=strpart(str,0,save_cursor[2]-1).a:char.strpart(str,save_cursor[2]-1)
+	endif
+
+	" clear buffer
+	exe 'normal ggdG'
+	cal append(0,str)
+	exe 'normal dd'
+
+	let save_cursor[2]=save_cursor[2]+1
+	call setpos('.', save_cursor)
+
+	if strlen(str)>=g:YATE_min_symbols_to_search
+		cal <SID>GenerateTagsList(str,0)
+	endif
+endfun
+
+fun <SID>GenerateTagsListCB()
+	cal <SID>GenerateTagsList(getline('.'),1)
 endfun
 
 fun! <SID>ToggleTagExplorerBuffer()
@@ -191,7 +259,7 @@ fun! <SID>ToggleTagExplorerBuffer()
 		exe "bo".g:YATE_window_height."sp YATE"
 		cal <SID>PrintTagsList()
 
-		exe "verbose inoremap <silent> <buffer> <Tab> <C-O>:cal <SID>GenerateTagsList()<CR>"
+		exe "verbose inoremap <silent> <buffer> <Tab> <C-O>:cal <SID>GenerateTagsListCB()<CR>"
 
 		exe "verbose inoremap <silent> <buffer> <Enter> <C-O>:cal <SID>GotoTag('e')<CR>"
 		exe "verbose noremap <silent> <buffer> <Enter> :cal <SID>GotoTag('e')<CR>"
@@ -207,14 +275,21 @@ fun! <SID>ToggleTagExplorerBuffer()
 		exe "verbose inoremap <silent> <buffer> <C-S-Enter> <C-O>:cal <SID>GotoTag('vs')<CR>"
 		exe "verbose noremap <silent> <buffer> <C-S-Enter> :cal <SID>GotoTag('vs')<CR>"
 
+		if g:YATE_enable_real_time_search
+			for c in split("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890~:-=_+[]{};\\\':<>?,./ ", '\zs')
+				exec 'inoremap <silent> <buffer> '.c.' <C-O>:cal <SID>AppendChar("'.c.'")<CR>'
+			endfor
+		endif
+
 		" color output
-		syn match YATE_tag_kind # \w* #
-		syn match YATE_tag_number #^\d*#
-		syn region YATE_tag_name matchgroup=Macro start=/\t|/ end='|'
+		syn match YATE_search_string #\%^.*$#
+		syn match YATE_tag_number #^\s*\d\+ # nextgroup=YATE_tag_name
+		syn region YATE_tag_name matchgroup=Macro start=/|/ end='|' nextgroup=YATE_tag_kind
+		syn match YATE_tag_kind # \h\+ # nextgroup=YATE_tag_filename 
 		syn region YATE_tag_filename matchgroup=Macro start='|' end=/$/
 
-		hi def link YATE_tag_name Identifier
 		hi def link YATE_tag_number Number
+		hi def link YATE_tag_name Identifier
 		hi def link YATE_tag_kind Type
 		hi def link YATE_tag_filename Directory
 
