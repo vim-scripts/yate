@@ -36,9 +36,13 @@
 " 				splitted buffer <Shift-Enter>, in new vertical splitted buffer 
 " 				<Ctrl-Shift-Enter>.
 "
-" Version:		1.0.0
+" Version:		1.0.1
 "
-" ChangeLog:	1.0.0:	Added automatic search after input of any character
+" ChangeLog:	1.0.1:	Fixed serious bug which caused the impossibility of inputing
+"						characters nowhere but at the and of the search string.
+"						Add support of GetLatestVimScripts.
+"
+"				1.0.0:	Added automatic search after input of any character
 "						(so called as-you-type search).
 " 						Long file paths may be cut to fit line width.
 " 						Fixed bug preventing jump by tags containing ~ (e.g.
@@ -46,18 +50,19 @@
 "						Fixed bug preventing jump by tags in files with mixed
 "						line ends (Win/Unix).
 "
-" 				0.9.2:	Attempt to search empty string doesn't produce error.
+"				0.9.2:	Attempt to search empty string doesn't produce error.
 " 						Replacement of modified buffer works correct.
 "						Close YATE buffer externally (by :q, ZZ etc.) dosn't break 
 "						its visibility toggle.
 "						Fixed bug leading to failure to open to tag containing square brackets.
 "
-" 				0.9.1:	Search string isn't cleared if there are no matched
+"				0.9.1:	Search string isn't cleared if there are no matched
 "						tags.
 "						Bug fixes.
 "
-" 				0.9:	First release
+"				0.9:	First release
 "
+" GetLatestVimScripts: 2068 8378 :AutoInstall: yate.vim
 "====================================================================================
 if exists( "g:loaded_YATE" )
 	finish
@@ -99,9 +104,13 @@ fun <SID>GotoTag(open_command)
 
 	let index=str2nr(str)
 	
+	cal <SID>OnLeaveBuffer()
+
 	exe ':wincmd p'
 	exe ':'.s:yate_winnr.'bd!'
 	let s:yate_winnr=-1
+
+	cal <SID>OnLeaveBuffer()
 
 	exe ':'.a:open_command.' '.s:tags_list[index]['filename']
 	let str=substitute(s:tags_list[index]['cmd'],"\*","\\\\*","g")
@@ -225,28 +234,34 @@ fun <SID>GenerateTagsList(str,auto_compl)
 		let s:user_line=<SID>AutoCompleteString(s:user_line)
 	endif
 	cal <SID>PrintTagsList()
+	exe 'normal l'
 endfun
 
 fun <SID>AppendChar(char)
-	let save_cursor = getpos(".")
+	let save_cursor = winsaveview()
 
 	let str=getline('.')
-	if strlen(str)==save_cursor[2]
-		let str=str.a:char
-	else
-		let str=strpart(str,0,save_cursor[2]-1).a:char.strpart(str,save_cursor[2]-1)
-	endif
+	let str=strpart(str,0,col(".")-1).a:char.strpart(str,col(".")-1)
 
-	" clear buffer
 	exe 'normal ggdG'
 	cal append(0,str)
 	exe 'normal dd'
 
-	let save_cursor[2]=save_cursor[2]+1
-	call setpos('.', save_cursor)
-
 	if strlen(str)>=g:YATE_min_symbols_to_search
 		cal <SID>GenerateTagsList(str,0)
+	endif
+	cal winrestview(save_cursor)
+	exe 'normal l'
+endfun
+
+fun <SID>OnEnterBuffer()
+	let s:old_ve = &ve
+	setlocal ve=all
+endfun
+
+fun <SID>OnLeaveBuffer()
+	if exists("s:old_ve")
+		let &ve=s:old_ve
 	endif
 endfun
 
@@ -292,12 +307,24 @@ fun! <SID>ToggleTagExplorerBuffer()
 		hi def link YATE_tag_name Identifier
 		hi def link YATE_tag_kind Type
 		hi def link YATE_tag_filename Directory
-
+			
 		let s:yate_winnr=bufnr("YATE")
-		autocmd BufUnload <buffer> exe 'let s:yate_winnr=-1'
-
+		
 		setlocal buftype=nofile
+
+		if !exists("s:first_time")
+			autocmd BufUnload <buffer> exe 'let s:yate_winnr=-1'
+
+			cal <SID>OnEnterBuffer()
+
+			autocmd BufEnter <buffer> cal <SID>OnEnterBuffer()
+			autocmd BufLeave <buffer> cal <SID>OnLeaveBuffer()
+
+			let s:first_time=1
+		endif
 	else
+		cal <SID>OnLeaveBuffer()
+
 		exe ':wincmd p'
 		exe ':'.s:yate_winnr.'bd!'
 		let s:yate_winnr=-1
