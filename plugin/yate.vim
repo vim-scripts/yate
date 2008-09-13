@@ -22,23 +22,32 @@
 " 				Parameter g:YATE_window_height sets height of search buffer. Default = 15
 " 				Parameter g:YATE_strip_long_paths enables(1)/disables(0) cutting of long file paths. Default = 1.
 " 				Parameter g:YATE_enable_real_time_search enables(1)/disables(0) as-you-type search. Default = 1.
-" 				Parameter g:YATE_min_symbols_to_search sets search string length threshold 
-" 				after which as-you-type search will start. Default = 4.
-"
+" 				Parameter g:YATE_min_symbols_to_search sets search string length threshold after
+" 				which as-you-type search will start. Default = 4.
+" 				Parameter g:YATE_max_matches_to_show sets the maximum number of
+" 				matches to display. If it's negative than all lines will be shown. Default = -1.
+" 				
 " 				To get list of matching tags set cursor on string containing expression
 " 				to search (in YATE buffer) then press <Tab> or <Enter>, never mind if 
 " 				you are in normal or insert mode.
 "
 " 				To open tag location set cursor on string with desired tag and
 " 				press <Enter> or double click left mouse button on this string, 
-" 				never mind if you are in normal or insert nmode.
+" 				never mind if you are in normal or insert mode.
 " 				To open tag in new tab press <Ctrl-Enter>, in new horizontal
 " 				splitted buffer <Shift-Enter>, in new vertical splitted buffer 
 " 				<Ctrl-Shift-Enter>.
 "
-" Version:		1.0.1
+" Version:		1.1.0
 "
-" ChangeLog:	1.0.1:	Fixed serious bug which caused the impossibility of inputing
+" ChangeLog:	1.1.0:	Fixes in as-you-type search to improve its usability
+"						and fix some bugs.
+" 						Added highlight of line with cursor.
+" 						Added parameter g:YATE_max_matches_to_show defining the maximum number of
+" 						matches to display.
+" 						Search results were protected from editing.
+" 				
+" 				1.0.1:	Fixed serious bug which caused the impossibility of inputing
 "						characters nowhere but at the and of the search string.
 "						Add support of GetLatestVimScripts.
 "
@@ -64,6 +73,7 @@
 "
 " GetLatestVimScripts: 2068 8378 :AutoInstall: yate.vim
 "====================================================================================
+
 if exists( "g:loaded_YATE" )
 	finish
 endif
@@ -92,6 +102,10 @@ if !exists("g:YATE_min_symbols_to_search")
 	let g:YATE_min_symbols_to_search = 4
 endif
 
+if !exists("g:YATE_max_matches_to_show")
+	let g:YATE_max_matches_to_show = -1
+endif
+
 command! -bang YATE :call <SID>ToggleTagExplorerBuffer()
 
 fun <SID>GotoTag(open_command)
@@ -104,13 +118,9 @@ fun <SID>GotoTag(open_command)
 
 	let index=str2nr(str)
 	
-	cal <SID>OnLeaveBuffer()
-
 	exe ':wincmd p'
 	exe ':'.s:yate_winnr.'bd!'
 	let s:yate_winnr=-1
-
-	cal <SID>OnLeaveBuffer()
 
 	exe ':'.a:open_command.' '.s:tags_list[index]['filename']
 	let str=substitute(s:tags_list[index]['cmd'],"\*","\\\\*","g")
@@ -161,10 +171,13 @@ fun <SID>AutoCompleteString(str)
 endfun
 
 fun <SID>PrintTagsList()
+	autocmd! CursorMovedI <buffer>
+
 	" clear buffer
 	exe 'normal ggdG'
 
 	if !exists("s:tags_list")
+		autocmd CursorMovedI <buffer> call <SID>OnCursorMovedI()
 		return
 	endif
 
@@ -172,6 +185,7 @@ fun <SID>PrintTagsList()
 	exe 'normal dd$'
 
 	if !len(s:tags_list)
+		autocmd CursorMovedI <buffer> call <SID>OnCursorMovedI()
 		return
 	endif
 
@@ -191,28 +205,32 @@ fun <SID>PrintTagsList()
 		endif
 	endfor
 
+	let n = len(s:tags_list)
+	let max_counter_len = 0
+	while n!=0
+		let n = n/10
+		let max_counter_len = max_counter_len + 1
+	endwhile
+
 	let window_width=winwidth('$')
 	let counter=0
 	for i in s:tags_list
-		let str=printf("%3d | %s",counter,i["name"])
-		for j in range(strlen(i["name"]),lname)
-			let str=str.' '
-		endfor
-		let str=str.'| '.i["kind"]
-		for j in range(strlen(i["kind"]),lkind)
-			let str=str.' '
-		endfor
+		let name = i["name"]
+		let kind = i["kind"]
+		let filename = i["filename"]
+		let counter_len = strlen(counter)
 
-		let str=str.'| '
+		let str=counter.repeat(' ',max_counter_len-counter_len).' | '.name.repeat(' ',lname-strlen(name)).' | '.kind.repeat(' ',lkind-strlen(kind)).' | '
+		
 		if !g:YATE_strip_long_paths
-			let str=str.i["filename"]
+			let str=str.filename
 		else
 			let sp=window_width-strlen(str)-3
 
-			if strlen(i["filename"])<=sp
-				let str=str.i["filename"]
+			if strlen(filename)<=sp
+				let str=str.filename
 			else
-				let str=str.'...'.strpart(i["filename"],strlen(i["filename"])-sp+3,sp-3)
+				let str=str.'...'.strpart(filename,strlen(filename)-sp+3,sp-3)
 			endif
 		endif
 		
@@ -220,6 +238,8 @@ fun <SID>PrintTagsList()
 
 		let counter=counter+1
 	endfor
+
+	autocmd CursorMovedI <buffer> call <SID>OnCursorMovedI()
 endfun
 
 fun <SID>GenerateTagsList(str,auto_compl)
@@ -228,45 +248,51 @@ fun <SID>GenerateTagsList(str,auto_compl)
 		return
 	endif
 	let s:user_line=a:str
-	let s:tags_list=taglist(s:user_line)
+	if g:YATE_max_matches_to_show>=0
+		let s:tags_list=taglist(s:user_line)[:g:YATE_max_matches_to_show]
+	else
+		let s:tags_list=taglist(s:user_line)
+	endif
 
 	if a:auto_compl
 		let s:user_line=<SID>AutoCompleteString(s:user_line)
 	endif
 	cal <SID>PrintTagsList()
-	exe 'normal l'
-endfun
-
-fun <SID>AppendChar(char)
-	let save_cursor = winsaveview()
-
-	let str=getline('.')
-	let str=strpart(str,0,col(".")-1).a:char.strpart(str,col(".")-1)
-
-	exe 'normal ggdG'
-	cal append(0,str)
-	exe 'normal dd'
-
-	if strlen(str)>=g:YATE_min_symbols_to_search
-		cal <SID>GenerateTagsList(str,0)
-	endif
-	cal winrestview(save_cursor)
-	exe 'normal l'
-endfun
-
-fun <SID>OnEnterBuffer()
-	let s:old_ve = &ve
-	setlocal ve=all
-endfun
-
-fun <SID>OnLeaveBuffer()
-	if exists("s:old_ve")
-		let &ve=s:old_ve
-	endif
 endfun
 
 fun <SID>GenerateTagsListCB()
 	cal <SID>GenerateTagsList(getline('.'),1)
+endfun
+
+function <SID>OnCursorMoved()
+	let l = getpos(".")[1]
+	if l > 1
+		setlocal cul
+		setlocal noma
+	else
+		setlocal nocul
+		setlocal ma
+	endif
+endfun
+
+function <SID>OnCursorMovedI()
+	let l = getpos(".")[1]
+	if l > 1
+		setlocal cul
+		setlocal noma
+	else
+		setlocal nocul
+		setlocal ma
+
+		if g:YATE_enable_real_time_search
+			let str=getline('.')
+			if s:user_line!=str && strlen(str)>=g:YATE_min_symbols_to_search
+				let save_cursor = winsaveview()
+				cal <SID>GenerateTagsList(str,0)
+				cal winrestview(save_cursor)
+			endif
+		endif
+	endif
 endfun
 
 fun! <SID>ToggleTagExplorerBuffer()
@@ -290,15 +316,9 @@ fun! <SID>ToggleTagExplorerBuffer()
 		exe "verbose inoremap <silent> <buffer> <C-S-Enter> <C-O>:cal <SID>GotoTag('vs')<CR>"
 		exe "verbose noremap <silent> <buffer> <C-S-Enter> :cal <SID>GotoTag('vs')<CR>"
 
-		if g:YATE_enable_real_time_search
-			for c in split("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890~:-=_+[]{};\\\':<>?,./ ", '\zs')
-				exec 'inoremap <silent> <buffer> '.c.' <C-O>:cal <SID>AppendChar("'.c.'")<CR>'
-			endfor
-		endif
-
 		" color output
 		syn match YATE_search_string #\%^.*$#
-		syn match YATE_tag_number #^\s*\d\+ # nextgroup=YATE_tag_name
+		syn match YATE_tag_number #\d\+\s\+# nextgroup=YATE_tag_name
 		syn region YATE_tag_name matchgroup=Macro start=/|/ end='|' nextgroup=YATE_tag_kind
 		syn match YATE_tag_kind # \h\+ # nextgroup=YATE_tag_filename 
 		syn region YATE_tag_filename matchgroup=Macro start='|' end=/$/
@@ -311,20 +331,18 @@ fun! <SID>ToggleTagExplorerBuffer()
 		let s:yate_winnr=bufnr("YATE")
 		
 		setlocal buftype=nofile
+		setlocal noswapfile
 
 		if !exists("s:first_time")
 			autocmd BufUnload <buffer> exe 'let s:yate_winnr=-1'
+			autocmd CursorMoved <buffer> call <SID>OnCursorMoved()
+			autocmd CursorMovedI <buffer> call <SID>OnCursorMovedI()
 
-			cal <SID>OnEnterBuffer()
-
-			autocmd BufEnter <buffer> cal <SID>OnEnterBuffer()
-			autocmd BufLeave <buffer> cal <SID>OnLeaveBuffer()
+			let s:user_line=''
 
 			let s:first_time=1
 		endif
 	else
-		cal <SID>OnLeaveBuffer()
-
 		exe ':wincmd p'
 		exe ':'.s:yate_winnr.'bd!'
 		let s:yate_winnr=-1
