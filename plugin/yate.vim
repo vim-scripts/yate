@@ -38,9 +38,12 @@
 " 				splitted buffer <Shift-Enter>, in new vertical splitted buffer 
 " 				<Ctrl-Shift-Enter>.
 "
-" Version:		1.1.0
+" Version:		1.1.1
 "
-" ChangeLog:	1.1.0:	Fixes in as-you-type search to improve its usability
+" ChangeLog:	1.1.1:	Slightly optimized search results output.
+" 						Fixed resizing of YATE window when vim is resized.
+"
+" 				1.1.0:	Fixes in as-you-type search to improve its usability
 "						and fix some bugs.
 " 						Added highlight of line with cursor.
 " 						Added parameter g:YATE_max_matches_to_show defining the maximum number of
@@ -173,23 +176,21 @@ endfun
 fun <SID>PrintTagsList()
 	autocmd! CursorMovedI <buffer>
 
+	setlocal nocul
+	setlocal ma
+
 	" clear buffer
 	exe 'normal ggdG'
-
-	if !exists("s:tags_list")
-		autocmd CursorMovedI <buffer> call <SID>OnCursorMovedI()
-		return
-	endif
 
 	cal append(0,s:user_line)
 	exe 'normal dd$'
 
-	if !len(s:tags_list)
+	if (!exists("s:tags_list")) || (!len(s:tags_list))
 		autocmd CursorMovedI <buffer> call <SID>OnCursorMovedI()
 		return
 	endif
 
-	" find the longest names, kind, filename
+	" find the longest name, kind
 	let lname=0
 	let lkind=0
 
@@ -205,38 +206,30 @@ fun <SID>PrintTagsList()
 		endif
 	endfor
 
-	let n = len(s:tags_list)
-	let max_counter_len = 0
-	while n!=0
-		let n = n/10
-		let max_counter_len = max_counter_len + 1
-	endwhile
+	let max_counter_len = strlen(len(s:tags_list))
 
-	let window_width=winwidth('$')
+	let printf_str=printf("%%-%dd | %%-%ds | %%-%ds | %%s",max_counter_len,lname,lkind)
+	let fn_width=winwidth('$')-(max_counter_len+lname+lkind+15)
+
+	if fn_width < 16
+		let fn_width = 16
+	endif
+
 	let counter=0
 	for i in s:tags_list
-		let name = i["name"]
-		let kind = i["kind"]
 		let filename = i["filename"]
-		let counter_len = strlen(counter)
 
-		let str=counter.repeat(' ',max_counter_len-counter_len).' | '.name.repeat(' ',lname-strlen(name)).' | '.kind.repeat(' ',lkind-strlen(kind)).' | '
-		
-		if !g:YATE_strip_long_paths
-			let str=str.filename
-		else
-			let sp=window_width-strlen(str)-3
-
-			if strlen(filename)<=sp
-				let str=str.filename
-			else
-				let str=str.'...'.strpart(filename,strlen(filename)-sp+3,sp-3)
+		if g:YATE_strip_long_paths
+			if strlen(filename)>fn_width
+				let filename='...'.strpart(filename,strlen(filename)-fn_width)
 			endif
 		endif
-		
-		cal append(line("$"),str)
 
+		let str=printf(printf_str,counter,i["name"],i["kind"],filename)
+		
 		let counter=counter+1
+
+		cal append(counter,str)
 	endfor
 
 	autocmd CursorMovedI <buffer> call <SID>OnCursorMovedI()
@@ -298,7 +291,6 @@ endfun
 fun! <SID>ToggleTagExplorerBuffer()
 	if !exists("s:yate_winnr") || s:yate_winnr==-1
 		exe "bo".g:YATE_window_height."sp YATE"
-		cal <SID>PrintTagsList()
 
 		exe "verbose inoremap <silent> <buffer> <Tab> <C-O>:cal <SID>GenerateTagsListCB()<CR>"
 
@@ -334,14 +326,17 @@ fun! <SID>ToggleTagExplorerBuffer()
 		setlocal noswapfile
 
 		if !exists("s:first_time")
+			let s:user_line=''
+			let s:first_time=1
+
 			autocmd BufUnload <buffer> exe 'let s:yate_winnr=-1'
 			autocmd CursorMoved <buffer> call <SID>OnCursorMoved()
 			autocmd CursorMovedI <buffer> call <SID>OnCursorMovedI()
-
-			let s:user_line=''
-
-			let s:first_time=1
+			autocmd VimResized <buffer> call <SID>PrintTagsList()
+			autocmd BufEnter <buffer> call <SID>PrintTagsList()
 		endif
+		
+		cal <SID>PrintTagsList()
 	else
 		exe ':wincmd p'
 		exe ':'.s:yate_winnr.'bd!'
