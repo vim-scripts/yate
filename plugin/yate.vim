@@ -26,6 +26,8 @@
 " 				which as-you-type search will start. Default = 4.
 " 				Parameter g:YATE_max_matches_to_show sets the maximum number of
 " 				matches to display. If it's negative than all lines will be shown. Default = -1.
+" 				Parameter g:YATE_history_size sets the maximum number of
+" 				stored search queries in history. Default = 10.
 " 				
 " 				To get list of matching tags set cursor on string containing expression
 " 				to search (in YATE buffer) then press <Tab> or <Enter>, never mind if 
@@ -34,13 +36,20 @@
 " 				To open tag location set cursor on string with desired tag and
 " 				press <Enter> or double click left mouse button on this string, 
 " 				never mind if you are in normal or insert mode.
+"
 " 				To open tag in new tab press <Ctrl-Enter>, in new horizontal
 " 				splitted buffer <Shift-Enter>, in new vertical splitted buffer 
 " 				<Ctrl-Shift-Enter>.
+" 
+" 				To get queries history press <Ctrl-H> in insert mode in
+" 				search string. Autocompletion using history also works by
+" 				<Ctrl-X><Ctrl-U>.
 "
-" Version:		1.1.1
+" Version:		1.2.0
 "
-" ChangeLog:	1.1.1:	Slightly optimized search results output.
+" ChangeLog:	1.2.0:	Added history of search queries.
+"
+" 				1.1.1:	Slightly optimized search results output.
 " 						Fixed resizing of YATE window when vim is resized.
 "
 " 				1.1.0:	Fixes in as-you-type search to improve its usability
@@ -109,14 +118,29 @@ if !exists("g:YATE_max_matches_to_show")
 	let g:YATE_max_matches_to_show = -1
 endif
 
+if !exists("g:YATE_history_size")
+	let g:YATE_history_size = 10
+endif
+
+if !exists("s:yate_history")
+	let s:yate_history = []
+endif
+
 command! -bang YATE :call <SID>ToggleTagExplorerBuffer()
 
 fun <SID>GotoTag(open_command)
-	let str=getline(".")
+	let str=getline('.')
 
 	if !exists("s:tags_list") || !len(s:tags_list) || match(str,"^.*|.*|.*|.*$")
 		call <SID>GenerateTagsListCB()
 		return
+	endif
+
+	if !count(s:yate_history,s:user_line)
+		if len(s:yate_history)>=g:YATE_history_size
+			call remove(s:yate_history,-1)
+		endif
+		call insert(s:yate_history,s:user_line)
 	endif
 
 	let index=str2nr(str)
@@ -235,6 +259,29 @@ fun <SID>PrintTagsList()
 	autocmd CursorMovedI <buffer> call <SID>OnCursorMovedI()
 endfun
 
+fun! <SID>ShowHistory()
+	let l = getpos(".")[1]
+	if l == 1
+		call cursor(0,1024)
+		call complete(1,s:yate_history)
+	endif
+	return ''
+endfun
+
+fun! CompleteYATEHistory(findstart, base)
+ 	if a:findstart
+		return 0
+	else
+		let res = []
+		for m in s:yate_history
+		  if m =~ '^' . a:base
+			call add(res, m)
+		  endif
+		endfor
+		return res
+	endif
+endfun
+
 fun <SID>GenerateTagsList(str,auto_compl)
 	" get tags list
 	if !strlen(a:str)
@@ -257,25 +304,33 @@ fun <SID>GenerateTagsListCB()
 	cal <SID>GenerateTagsList(getline('.'),1)
 endfun
 
-function <SID>OnCursorMoved()
+fun <SID>OnCursorMoved()
 	let l = getpos(".")[1]
 	if l > 1
 		setlocal cul
 		setlocal noma
+		
+		setlocal completefunc=''
 	else
 		setlocal nocul
 		setlocal ma
+		
+		setlocal completefunc=CompleteYATEHistory
 	endif
 endfun
 
-function <SID>OnCursorMovedI()
+fun <SID>OnCursorMovedI()
 	let l = getpos(".")[1]
 	if l > 1
 		setlocal cul
 		setlocal noma
+		
+		setlocal completefunc=''
 	else
 		setlocal nocul
 		setlocal ma
+
+		setlocal completefunc=CompleteYATEHistory
 
 		if g:YATE_enable_real_time_search
 			let str=getline('.')
@@ -288,25 +343,32 @@ function <SID>OnCursorMovedI()
 	endif
 endfun
 
+fun <SID>GotoTagE()
+	cal <SID>GotoTag('e')
+endfun
+
 fun! <SID>ToggleTagExplorerBuffer()
 	if !exists("s:yate_winnr") || s:yate_winnr==-1
 		exe "bo".g:YATE_window_height."sp YATE"
 
-		exe "verbose inoremap <silent> <buffer> <Tab> <C-O>:cal <SID>GenerateTagsListCB()<CR>"
+		exe "inoremap <silent> <buffer> <Tab> <C-O>:cal <SID>GenerateTagsListCB()<CR>"
 
-		exe "verbose inoremap <silent> <buffer> <Enter> <C-O>:cal <SID>GotoTag('e')<CR>"
-		exe "verbose noremap <silent> <buffer> <Enter> :cal <SID>GotoTag('e')<CR>"
-		exe "verbose noremap <silent> <buffer> <2-leftmouse> :cal <SID>GotoTag('e')<CR>"
-		exe "verbose inoremap <silent> <buffer> <2-leftmouse> <C-O>:cal <SID>GotoTag('e')<CR>"
+		exe "inoremap <expr> <buffer> <Enter> pumvisible() ? '<CR><C-O>:cal <SID>GotoTagE()<CR>' : '<C-O>:cal <SID>GotoTagE()<CR>'"
+		
+		exe "noremap <silent> <buffer> <Enter> :cal <SID>GotoTag('e')<CR>"
+		exe "noremap <silent> <buffer> <2-leftmouse> :cal <SID>GotoTag('e')<CR>"
+		exe "inoremap <silent> <buffer> <2-leftmouse> <C-O>:cal <SID>GotoTag('e')<CR>"
 
-		exe "verbose inoremap <silent> <buffer> <C-Enter> <C-O>:cal <SID>GotoTag('tabnew')<CR>"
-		exe "verbose noremap <silent> <buffer> <C-Enter> :cal <SID>GotoTag('tabnew')<CR>"
+		exe "inoremap <silent> <buffer> <C-Enter> <C-O>:cal <SID>GotoTag('tabnew')<CR>"
+		exe "noremap <silent> <buffer> <C-Enter> :cal <SID>GotoTag('tabnew')<CR>"
 
-		exe "verbose inoremap <silent> <buffer> <S-Enter> <C-O>:cal <SID>GotoTag('sp')<CR>"
-		exe "verbose noremap <silent> <buffer> <S-Enter> :cal <SID>GotoTag('sp')<CR>"
+		exe "inoremap <silent> <buffer> <S-Enter> <C-O>:cal <SID>GotoTag('sp')<CR>"
+		exe "noremap <silent> <buffer> <S-Enter> :cal <SID>GotoTag('sp')<CR>"
 
-		exe "verbose inoremap <silent> <buffer> <C-S-Enter> <C-O>:cal <SID>GotoTag('vs')<CR>"
-		exe "verbose noremap <silent> <buffer> <C-S-Enter> :cal <SID>GotoTag('vs')<CR>"
+		exe "inoremap <silent> <buffer> <C-S-Enter> <C-O>:cal <SID>GotoTag('vs')<CR>"
+		exe "noremap <silent> <buffer> <C-S-Enter> :cal <SID>GotoTag('vs')<CR>"
+		
+		exe "inoremap <silent> <buffer> <C-H> <C-R>=<SID>ShowHistory()<CR>"
 
 		" color output
 		syn match YATE_search_string #\%^.*$#
