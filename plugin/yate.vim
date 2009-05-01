@@ -41,13 +41,15 @@
 " 				splitted buffer <Shift-Enter>, in new vertical splitted buffer 
 " 				<Ctrl-Shift-Enter>.
 " 
-" 				To get queries history press <Ctrl-H> in insert mode in
+" 				To get queries history press <Ctrl-H> in insert or normal mode in
 " 				search string. Autocompletion using history also works by
 " 				<Ctrl-X><Ctrl-U>.
 "
-" Version:		1.2.0
+" Version:		1.2.1
 "
-" ChangeLog:	1.2.0:	Added history of search queries.
+" ChangeLog:	1.2.1:	History menu (<Ctrl-H>) also works in normal mode.
+"
+" 				1.2.0:	Added history of search queries.
 "
 " 				1.1.1:	Slightly optimized search results output.
 " 						Fixed resizing of YATE window when vim is resized.
@@ -354,8 +356,8 @@ fun! <SID>ToggleTagExplorerBuffer()
 		exe "inoremap <silent> <buffer> <Tab> <C-O>:cal <SID>GenerateTagsListCB()<CR>"
 
 		exe "inoremap <expr> <buffer> <Enter> pumvisible() ? '<CR><C-O>:cal <SID>GotoTagE()<CR>' : '<C-O>:cal <SID>GotoTagE()<CR>'"
-		
 		exe "noremap <silent> <buffer> <Enter> :cal <SID>GotoTag('e')<CR>"
+
 		exe "noremap <silent> <buffer> <2-leftmouse> :cal <SID>GotoTag('e')<CR>"
 		exe "inoremap <silent> <buffer> <2-leftmouse> <C-O>:cal <SID>GotoTag('e')<CR>"
 
@@ -369,6 +371,7 @@ fun! <SID>ToggleTagExplorerBuffer()
 		exe "noremap <silent> <buffer> <C-S-Enter> :cal <SID>GotoTag('vs')<CR>"
 		
 		exe "inoremap <silent> <buffer> <C-H> <C-R>=<SID>ShowHistory()<CR>"
+		exe "noremap <silent> <buffer> <C-H> I<C-R>=<SID>ShowHistory()<CR>"
 
 		" color output
 		syn match YATE_search_string #\%^.*$#
