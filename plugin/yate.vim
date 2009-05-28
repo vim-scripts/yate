@@ -45,9 +45,11 @@
 " 				search string. Autocompletion using history also works by
 " 				<Ctrl-X><Ctrl-U>.
 "
-" Version:		1.2.1
+" Version:		1.2.2
 "
-" ChangeLog:	1.2.1:	History menu (<Ctrl-H>) also works in normal mode.
+" ChangeLog:	1.2.2:	Fixed cleaning of search string in some cases.
+"
+" 				1.2.1:	History menu (<Ctrl-H>) also works in normal mode.
 "
 " 				1.2.0:	Added history of search queries.
 "
@@ -336,10 +338,14 @@ fun <SID>OnCursorMovedI()
 
 		if g:YATE_enable_real_time_search
 			let str=getline('.')
-			if s:user_line!=str && strlen(str)>=g:YATE_min_symbols_to_search
-				let save_cursor = winsaveview()
-				cal <SID>GenerateTagsList(str,0)
-				cal winrestview(save_cursor)
+			if s:user_line!=str 
+				if strlen(str)>=g:YATE_min_symbols_to_search
+					let save_cursor = winsaveview()
+					cal <SID>GenerateTagsList(str,0)
+					cal winrestview(save_cursor)
+				else
+					let s:user_line=str
+				endif
 			endif
 		endif
 	endif
