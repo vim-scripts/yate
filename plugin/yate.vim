@@ -19,7 +19,7 @@
 " Installation:	Just drop this file in your plugin directory.
 "
 " Usage:		Command :YATE toggles visibility of search buffer.
-" 				Parameter g:YATE_window_height sets height of search buffer. Default = 15
+" 				Parameter g:YATE_window_height sets height of search buffer. Default = 15.
 " 				Parameter g:YATE_strip_long_paths enables(1)/disables(0) cutting of long file paths. Default = 1.
 " 				Parameter g:YATE_enable_real_time_search enables(1)/disables(0) as-you-type search. Default = 1.
 " 				Parameter g:YATE_min_symbols_to_search sets search string length threshold after
@@ -45,9 +45,10 @@
 " 				search string. Autocompletion using history also works by
 " 				<Ctrl-X><Ctrl-U>.
 "
-" Version:		1.2.2
+" Version:		1.2.3
 "
-" ChangeLog:	1.2.2:	Fixed cleaning of search string in some cases.
+" ChangeLog:	1.2.3:	Insert mode is default in YATE buffer.
+"				1.2.2:	Fixed cleaning of search string in some cases.
 "
 " 				1.2.1:	History menu (<Ctrl-H>) also works in normal mode.
 "
@@ -395,6 +396,7 @@ fun! <SID>ToggleTagExplorerBuffer()
 		
 		setlocal buftype=nofile
 		setlocal noswapfile
+		setlocal insertmode
 
 		if !exists("s:first_time")
 			let s:user_line=''

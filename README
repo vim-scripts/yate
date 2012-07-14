@@ -2,14 +2,18 @@ This is a mirror of http://www.vim.org/scripts/script.php?script_id=2068
 
 This plugin makes search in tags more convenient. It holds query and search result in one buffer for faster jump to desired tag.
 
+Source code is also available on bitbucket: https://bitbucket.org/madevgeny/yate.
+
 Usage:
-Command :YATE toggles visibility of search buffer.
-Parameter g:YATE_window_height sets height of search buffer. Default = 15
+Command :YATE toggles visibility of search buffer which will be closed after tag was selected.
+Command :YATEStationary toggles visibility of search buffer which will not be closed after tag is selected, instead cursor remains in YATE buffer to allow select another tag.
+Parameter g:YATE_window_height sets height of search buffer. Default = 15.
 Parameter g:YATE_strip_long_paths enables(1)/disables(0) cutting of long file paths. Default = 1.
 Parameter g:YATE_enable_real_time_search enables(1)/disables(0) as-you-type search. Default = 1.
 Parameter g:YATE_min_symbols_to_search sets search string length threshold after which as-you-type search will start. Default = 4.
 Parameter g:YATE_max_matches_to_show sets the maximum number of matches to display. If it's negative than all lines will be shown. Default = -1.
 Parameter g:YATE_history_size sets the maximum number of stored search queries in history. Default = 10.
+Parameter g:YATE_clear_search_string controls clearing of search string on next YATE buffer invocation. Default = 1.
 
 To get list of matching tags set cursor on string containing expression
 to search (in YATE buffer) then press <Tab> or <Enter>, never mind if 
