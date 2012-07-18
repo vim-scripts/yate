@@ -45,9 +45,10 @@
 " 				search string. Autocompletion using history also works by
 " 				<Ctrl-X><Ctrl-U>.
 "
-" Version:		1.2.4
+" Version:		1.2.5
 "
-" ChangeLog:	1.2.4:	Fixed leaving of insert mode after leaving YATE buffer.
+" ChangeLog:	1.2.5:	Force disable line numbering in YATE buffer.
+" 				1.2.4:	Fixed leaving of insert mode after leaving YATE buffer.
 " 				1.2.3:	Insert mode is default in YATE buffer.
 "				1.2.2:	Fixed cleaning of search string in some cases.
 "
@@ -410,6 +411,7 @@ fun! <SID>ToggleTagExplorerBuffer()
 		
 		setlocal buftype=nofile
 		setlocal noswapfile
+		setlocal nonumber
 
 		let s:prev_mode = mode()
 		exe 'startinsert'
