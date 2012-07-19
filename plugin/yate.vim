@@ -16,7 +16,14 @@
 " 				It holds query and search result in one buffer for faster jump to 
 " 				desired tag.
 "
+" 				Source code is also available on bitbucket: https://bitbucket.org/madevgeny/yate.
+"
 " Installation:	Just drop this file in your plugin directory.
+" 				If you use Vundle (https://github.com/gmarik/vundle/), you could add 
+"
+"				Bundle('https://bitbucket.org/madevgeny/yate.git')
+"
+"				to you Vundle config to install yate.
 "
 " Usage:		Command :YATE toggles visibility of search buffer.
 " 				Parameter g:YATE_window_height sets height of search buffer. Default = 15.
@@ -28,6 +35,7 @@
 " 				matches to display. If it's negative than all lines will be shown. Default = -1.
 " 				Parameter g:YATE_history_size sets the maximum number of
 " 				stored search queries in history. Default = 10.
+" 				Parameter g:YATE_clear_search_string controls clearing of search string on next YATE buffer invocation. Default = 1.
 " 				
 " 				To get list of matching tags set cursor on string containing expression
 " 				to search (in YATE buffer) then press <Tab> or <Enter>, never mind if 
@@ -45,11 +53,20 @@
 " 				search string. Autocompletion using history also works by
 " 				<Ctrl-X><Ctrl-U>.
 "
-" Version:		1.2.5
+" Version:		1.3.0
 "
-" ChangeLog:	1.2.5:	Force disable line numbering in YATE buffer.
+" ChangeLog:	1.3.0:	Added parameter g:YATE_clear_search_string to control
+"						clearing of search string on next YATE buffer invocation.
+"						Pressing <Enter> in search string if length of search
+"						string is more or equal g:YATE_min_symbols_to_search
+"						lead to open first tag in search results.
+"
+"				1.2.5:	Force disable line numbering in YATE buffer.
+"
 " 				1.2.4:	Fixed leaving of insert mode after leaving YATE buffer.
+"
 " 				1.2.3:	Insert mode is default in YATE buffer.
+"
 "				1.2.2:	Fixed cleaning of search string in some cases.
 "
 " 				1.2.1:	History menu (<Ctrl-H>) also works in normal mode.
@@ -129,6 +146,10 @@ if !exists("g:YATE_history_size")
 	let g:YATE_history_size = 10
 endif
 
+if !exists("g:YATE_clear_search_string")
+	let g:YATE_clear_search_string = 1
+endif
+
 if !exists("s:yate_history")
 	let s:yate_history = []
 endif
@@ -138,7 +159,16 @@ command! -bang YATE :call <SID>ToggleTagExplorerBuffer()
 fun <SID>GotoTag(open_command)
 	let str=getline('.')
 
-	if !exists("s:tags_list") || !len(s:tags_list) || match(str,"^.*|.*|.*|.*$")
+	if !exists("s:tags_list") || !len(s:tags_list)
+		call <SID>GenerateTagsListCB()
+		return
+	endif
+
+	if line('.') == 1 && len(str) >= g:YATE_min_symbols_to_search
+		let str=getline(2)
+	endif
+
+	if match(str,"^.*|.*|.*|.*$")
 		call <SID>GenerateTagsListCB()
 		return
 	endif
@@ -415,6 +445,11 @@ fun! <SID>ToggleTagExplorerBuffer()
 
 		let s:prev_mode = mode()
 		exe 'startinsert'
+
+		if g:YATE_clear_search_string
+			let s:user_line = ''
+			let s:tags_list = []
+		endif
 
 		if !exists("s:first_time")
 			let s:user_line=''
