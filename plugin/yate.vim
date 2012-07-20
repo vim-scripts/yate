@@ -53,9 +53,11 @@
 " 				search string. Autocompletion using history also works by
 " 				<Ctrl-X><Ctrl-U>.
 "
-" Version:		1.3.0
+" Version:		1.3.1
 "
-" ChangeLog:	1.3.0:	Added parameter g:YATE_clear_search_string to control
+" ChangeLog:	1.3.1:	Disabled work of AutoComplPop plugin in YATE buffer.
+"
+" 				1.3.0:	Added parameter g:YATE_clear_search_string to control
 "						clearing of search string on next YATE buffer invocation.
 "						Pressing <Enter> in search string if length of search
 "						string is more or equal g:YATE_min_symbols_to_search
@@ -342,8 +344,7 @@ fun <SID>GenerateTagsListCB()
 endfun
 
 fun <SID>OnCursorMoved()
-	let l = getpos(".")[1]
-	if l > 1
+	if line('.') > 1
 		setlocal cul
 		setlocal noma
 		
@@ -357,8 +358,7 @@ fun <SID>OnCursorMoved()
 endfun
 
 fun <SID>OnCursorMovedI()
-	let l = getpos(".")[1]
-	if l > 1
+	if line('.') > 1
 		setlocal cul
 		setlocal noma
 		
@@ -389,12 +389,21 @@ fun <SID>GotoTagE()
 endfun
 
 fun <SID>OnBufLeave()
+	" Enable acp.vim plugin.
+	if exists(':AcpUnlock')
+		exe 'AcpUnlock'
+	endif
 	if s:prev_mode != 'i'
 		exe 'stopinsert'
 	endif
 endfun
 
 fun <SID>OnBufEnter()
+	" Disable acp.vim plugin as cursor callbacks doesn't work if popup menu is
+	" shown.
+	if exists(':AcpLock')
+		exe 'AcpLock'
+	endif
 	let s:prev_mode = mode()
 	exe 'startinsert'
 
@@ -443,9 +452,6 @@ fun! <SID>ToggleTagExplorerBuffer()
 		setlocal noswapfile
 		setlocal nonumber
 
-		let s:prev_mode = mode()
-		exe 'startinsert'
-
 		if g:YATE_clear_search_string
 			let s:user_line = ''
 			let s:tags_list = []
@@ -463,7 +469,7 @@ fun! <SID>ToggleTagExplorerBuffer()
 			autocmd BufEnter <buffer> call <SID>OnBufEnter()
 		endif
 		
-		cal <SID>PrintTagsList()
+		cal <SID>OnBufEnter()
 	else
 		exe ':wincmd p'
 		exe ':'.s:yate_winnr.'bd!'
