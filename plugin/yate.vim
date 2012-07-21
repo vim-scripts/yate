@@ -25,7 +25,8 @@
 "
 "				to you Vundle config to install yate.
 "
-" Usage:		Command :YATE toggles visibility of search buffer.
+" Usage:		Command :YATE toggles visibility of search buffer wich will be closed after tag was selected.
+"				Command :YATEStationary toggles visibility of search buffer wich will not be closed after tag is selected, instead cursor remains in YATE buffer to allow select another tag.
 " 				Parameter g:YATE_window_height sets height of search buffer. Default = 15.
 " 				Parameter g:YATE_strip_long_paths enables(1)/disables(0) cutting of long file paths. Default = 1.
 " 				Parameter g:YATE_enable_real_time_search enables(1)/disables(0) as-you-type search. Default = 1.
@@ -53,9 +54,13 @@
 " 				search string. Autocompletion using history also works by
 " 				<Ctrl-X><Ctrl-U>.
 "
-" Version:		1.3.1
+" Version:		1.4.0
 "
-" ChangeLog:	1.3.1:	Disabled work of AutoComplPop plugin in YATE buffer.
+" ChangeLog:	1.4.0:	Added command YATEStationary to look into several tags
+"						without reopen YATE buffer.
+" 						Fixed conflict if already there is mapping on Q.
+"
+" 				1.3.1:	Disabled work of AutoComplPop plugin in YATE buffer.
 "
 " 				1.3.0:	Added parameter g:YATE_clear_search_string to control
 "						clearing of search string on next YATE buffer invocation.
@@ -144,21 +149,22 @@ if !exists("g:YATE_max_matches_to_show")
 	let g:YATE_max_matches_to_show = -1
 endif
 
-if !exists("g:YATE_history_size")
-	let g:YATE_history_size = 10
-endif
-
 if !exists("g:YATE_clear_search_string")
 	let g:YATE_clear_search_string = 1
+endif
+
+if !exists("g:YATE_history_size")
+	let g:YATE_history_size = 10
 endif
 
 if !exists("s:yate_history")
 	let s:yate_history = []
 endif
 
-command! -bang YATE :call <SID>ToggleTagExplorerBuffer()
+command! -bang YATE :call <SID>ToggleTagExplorerBuffer(0)
+command! -bang YATEStationary :call <SID>ToggleTagExplorerBuffer(1)
 
-fun <SID>GotoTag(open_command)
+fun <SID>GotoTag(open_command, stationary)
 	let str=getline('.')
 
 	if !exists("s:tags_list") || !len(s:tags_list)
@@ -183,20 +189,31 @@ fun <SID>GotoTag(open_command)
 	endif
 
 	let index=str2nr(str)
-	
-	exe ':wincmd p'
-	exe ':'.s:yate_winnr.'bd!'
-	let s:yate_winnr=-1
 
-	exe ':'.a:open_command.' '.s:tags_list[index]['filename']
+	let pos_in_yate = getpos(".") " save cursor position may halp later
+	exe ':wincmd p'
+	if !a:stationary
+		exe ':'.s:yate_winnr.'bd!'
+		let s:yate_winnr=-1
+	endif
+
+	exe ':silent '.a:open_command.' '.s:tags_list[index]['filename']
 	let str=substitute(s:tags_list[index]['cmd'],"\*","\\\\*","g")
 	let str=substitute(str,"\[","\\\\[","g")
 	let str=substitute(str,"\]","\\\\]","g")
 	let str=substitute(str,"\\~","\\\\~","g")
 	let str=substitute(str,"\$/","*$/","g")
 	exe str
-	" Without it you should press Enter once again some times.
-	exe 'normal Q'
+
+	" Without it you should press Enter to suppress error mesage if there are
+	" no matches of corresponding regexp.
+	exe ':redraw'
+
+	if a:stationary
+		" return to yate
+		exe ':wincmd p'
+		call setpos('.', pos_in_yate)
+	endif
 endfun
 
 fun <SID>AutoCompleteString(str)
@@ -384,8 +401,8 @@ fun <SID>OnCursorMovedI()
 	endif
 endfun
 
-fun <SID>GotoTagE()
-	cal <SID>GotoTag('e')
+fun <SID>GotoTagE(stationary)
+	cal <SID>GotoTag('e', a:stationary)
 endfun
 
 fun <SID>OnBufLeave()
@@ -410,26 +427,31 @@ fun <SID>OnBufEnter()
 	call <SID>PrintTagsList()
 endfun
 
-fun! <SID>ToggleTagExplorerBuffer()
+fun! <SID>ToggleTagExplorerBuffer(stationary)
 	if !exists("s:yate_winnr") || s:yate_winnr==-1
-		exe "bo".g:YATE_window_height."sp YATE"
+		let buffer_name = 'YATE'
+		if a:stationary
+			let buffer_name = 'YATE (stationary)'
+		endif
+
+		exe "bo".g:YATE_window_height."sp ".buffer_name
 
 		exe "inoremap <silent> <buffer> <Tab> <C-O>:cal <SID>GenerateTagsListCB()<CR>"
 
-		exe "inoremap <expr> <buffer> <Enter> pumvisible() ? '<CR><C-O>:cal <SID>GotoTagE()<CR>' : '<C-O>:cal <SID>GotoTagE()<CR>'"
-		exe "noremap <silent> <buffer> <Enter> :cal <SID>GotoTag('e')<CR>"
+		exe printf("inoremap <expr> <buffer> <Enter> pumvisible() ? '<CR><C-O>:cal <SID>GotoTagE(%d)<CR>' : '<C-O>:cal <SID>GotoTagE(%d)<CR>'", a:stationary, a:stationary)
+		exe printf("noremap <silent> <buffer> <Enter> :cal <SID>GotoTag('e', %d)<CR>", a:stationary)
 
-		exe "noremap <silent> <buffer> <2-leftmouse> :cal <SID>GotoTag('e')<CR>"
-		exe "inoremap <silent> <buffer> <2-leftmouse> <C-O>:cal <SID>GotoTag('e')<CR>"
+		exe printf("noremap <silent> <buffer> <2-leftmouse> :cal <SID>GotoTag('e', %d)<CR>", a:stationary)
+		exe printf("inoremap <silent> <buffer> <2-leftmouse> <C-O>:cal <SID>GotoTag('e', %d)<CR>", a:stationary)
 
-		exe "inoremap <silent> <buffer> <C-Enter> <C-O>:cal <SID>GotoTag('tabnew')<CR>"
-		exe "noremap <silent> <buffer> <C-Enter> :cal <SID>GotoTag('tabnew')<CR>"
+		exe printf("inoremap <silent> <buffer> <C-Enter> <C-O>:cal <SID>GotoTag('tabnew', %d)<CR>", a:stationary)
+		exe printf("noremap <silent> <buffer> <C-Enter> :cal <SID>GotoTag('tabnew', %d)<CR>", a:stationary)
 
-		exe "inoremap <silent> <buffer> <S-Enter> <C-O>:cal <SID>GotoTag('sp')<CR>"
-		exe "noremap <silent> <buffer> <S-Enter> :cal <SID>GotoTag('sp')<CR>"
+		exe printf("inoremap <silent> <buffer> <S-Enter> <C-O>:cal <SID>GotoTag('sp', %d)<CR>", a:stationary)
+		exe printf("noremap <silent> <buffer> <S-Enter> :cal <SID>GotoTag('sp', %d)<CR>", a:stationary)
 
-		exe "inoremap <silent> <buffer> <C-S-Enter> <C-O>:cal <SID>GotoTag('vs')<CR>"
-		exe "noremap <silent> <buffer> <C-S-Enter> :cal <SID>GotoTag('vs')<CR>"
+		exe printf("inoremap <silent> <buffer> <C-S-Enter> <C-O>:cal <SID>GotoTag('vs', %d)<CR>", a:stationary)
+		exe printf("noremap <silent> <buffer> <C-S-Enter> :cal <SID>GotoTag('vs', %d)<CR>", a:stationary)
 		
 		exe "inoremap <silent> <buffer> <C-H> <C-R>=<SID>ShowHistory()<CR>"
 		exe "noremap <silent> <buffer> <C-H> I<C-R>=<SID>ShowHistory()<CR>"
@@ -446,7 +468,7 @@ fun! <SID>ToggleTagExplorerBuffer()
 		hi def link YATE_tag_kind Type
 		hi def link YATE_tag_filename Directory
 			
-		let s:yate_winnr=bufnr("YATE")
+		let s:yate_winnr=bufnr(buffer_name)
 		
 		setlocal buftype=nofile
 		setlocal noswapfile
