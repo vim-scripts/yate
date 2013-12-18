@@ -54,9 +54,11 @@
 " 				search string. Autocompletion using history also works by
 " 				<Ctrl-X><Ctrl-U>.
 "
-" Version:		1.4.1
+" Version:		1.4.2
 "
-" ChangeLog:	1.4.1:	Fixed issue with TabBar plugin.
+" ChangeLog:	1.4.2:	Fixed error when running YATEStationary. Thanks to Eoin
+" Mcloughlin.
+"				1.4.1:	Fixed issue with TabBar plugin.
 " 						Removed yate buffer from buffers list.
 "						Better work with history popup menu.
 "
@@ -198,7 +200,6 @@ fun <SID>GotoTag(open_command, stationary)
 
 	call <SID>GoToPrevWindow()
 
-	"exe ':wincmd p'
 	if !a:stationary
 		exe ':'.s:yate_winnr.'bd!'
 		let s:yate_winnr=-1
@@ -497,7 +498,7 @@ fun! <SID>ToggleTagExplorerBuffer(stationary)
 	if !exists("s:yate_winnr") || s:yate_winnr==-1
 		let buffer_name = 'YATE'
 		if a:stationary
-			let buffer_name = 'YATE (stationary)'
+			let buffer_name = 'YATE\ (stationary)'
 		endif
 
 		exe "bo".g:YATE_window_height."sp ".buffer_name
